@@ -9,6 +9,9 @@ export function createLiveSource(info, { onStatus } = {}) {
   let waitTimer = 0, iframe = null, win = null, ready = false, t = 0, paused = true, rate = 1, seeking = false;
   let displayedTime = 0, destroyed = false, loadVersion = 0, seekVersion = 0, seekTimer = 0, playTimer = 0;
   let wantPlay = false;   // play asked for while the page was loading: start once it is ready
+  let vol = 1, mut = false;   // a page that plays its own sound (Remotion bridge: VH_BRIDGE) takes VideoHub's volume / mute
+  const pageSound = () => { try { return !audio && win?.VH_BRIDGE?.setVolume ? win.VH_BRIDGE : null; } catch { return null; } };
+  const pushSound = () => { const B = pageSound(); if (B) { B.setVolume(vol); B.setMuted(mut); } };
   let base = { t: 0, at: 0 }, raf = 0, need = false, rvfc = [], frames = 0, fpsAt = performance.now(), drawMs = 0, scale = 1;
   const audio = info.audio ? h('audio', { src: info.audio, preload: 'auto' }) : null;
   const src = new EventTarget();
@@ -53,7 +56,7 @@ export function createLiveSource(info, { onStatus } = {}) {
           if (+c.fps) info.fps = +c.fps; if (+c.duration) info.dur = +c.duration;
           const w = +(c.outWidth || c.width), hh = +(c.outHeight || c.height); if (w && hh) { info.w = w; info.h = hh; iframe.style.width = w + 'px'; iframe.style.height = hh + 'px'; }
         }
-        present(); fire('loadedmetadata'); fire('timeupdate');
+        pushSound(); present(); fire('loadedmetadata'); fire('timeupdate');
       } else if (performance.now() - t0 > 120000) { clearInterval(wait); status({ state: 'error', error: 'The page was not ready within 2 minutes (no READY signal).' }); }
     }, 100);
     f.addEventListener('load', () => { try { f.contentWindow.addEventListener('error', e => { f.contentWindow.__vhError = e.message; }); } catch { } });
@@ -190,8 +193,8 @@ export function createLiveSource(info, { onStatus } = {}) {
     duration: { get: () => info.dur },
     videoWidth: { get: () => info.w }, videoHeight: { get: () => info.h },
     playbackRate: { get: () => rate, set: v => { const now = src.currentTime; rate = +v || 1; base = { t: now, at: performance.now() }; if (audio) audio.playbackRate = rate; } },
-    volume: { get: () => audio ? audio.volume : 1, set: v => { if (audio) audio.volume = v; } },
-    muted: { get: () => audio ? audio.muted : true, set: v => { if (audio) audio.muted = v; } },
+    volume: { get: () => audio ? audio.volume : vol, set: v => { if (audio) audio.volume = v; else { vol = Math.max(0, Math.min(1, +v || 0)); pushSound(); } } },
+    muted: { get: () => audio ? audio.muted : pageSound() ? mut : true, set: v => { if (audio) audio.muted = v; else { mut = !!v; pushSound(); } } },
   });
   Object.assign(src, {
     el: box, isLive: true, info, play, pause, pauseAt, capture, snap, snapDisplayed,

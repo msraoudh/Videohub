@@ -17,6 +17,7 @@ Claude copies for a new film.
 | Narration row, captions, "narration at that moment" in notes | `words.json` / `.srt` (§5.2) |
 | Sound layers, mute/solo, per-layer levels | stem WAVs (§5.3) |
 | Scene editor / 2D layers editor | the optional engine hooks (§5.4) |
+| 🎬 Edit film (timeline of every element, texts on the picture, sound, cuts) | a Remotion film through the bridge with the edit layer `vh-edit.tsx` (§5.6) |
 
 ## 1. What makes a folder a project
 
@@ -193,3 +194,43 @@ sound edits are applied by VideoHub when it builds the mix. Never delete or over
 ### 5.5 Quick checks ("🔍 Scan")
 Pages with `window.qaFrame` get engine-specific frame checks; every live page gets brightness/freeze checks from its
 canvases.
+
+### 5.6 Remotion films: the film editor (`src/vh-edits.json`)
+Remotion films play in VideoHub through the Remotion bridge (`<workspace>/templates/remotion-bridge`, `build.mjs`). With
+its **edit layer** the user edits the film in VideoHub while watching it (top bar → 🎬 Edit film):
+
+- every element is a block on its own timeline lane (scenes, voice + face clip, captions, chrome words / texts,
+  graphics, sound effects, music): drag = move, edges = trim; locked blocks (scenes) are only shown;
+- on the picture: click a text to select it, drag = move, corner square = size, double-click = retype, arrows = nudge;
+- sound: volume per SFX, mute, replace from the SFX library (`~/.claude/skills/global-video-styles/sfx`, never the
+  « glass » sounds; the file is copied into the project's `public/vh-sfx/`), music level and ducking under the voice;
+- the clip: split at the playhead (S), remove a piece or the I→O range; the pause left around a join closes to ≤ 0.15 s,
+  "Close pauses" does it for the whole film; removed pieces can be put back;
+- undo / redo (Ctrl+Z / Ctrl+Y). Every change is saved at once in the Remotion project's `src/vh-edits.json` and the open
+  preview redraws without a rebuild (a cut reloads the page: the film's length changes).
+
+**What the film needs** (`build.mjs --name <film> --init-edit` installs `src/vh-edit.tsx` and an empty
+`src/vh-edits.json`; the film imports both):
+
+```tsx
+import {Vh, VhCut, vhClip, vhDuration, vhList, vhOne, vhSrc} from './vh-edit';
+// a list of elements: the getter returns them with the user's edits (hidden ones left out), each with .vh
+const words = vhList('chrome', {lane: 'Chrome words', kind: 'text'}, () => WORDS,
+  (w) => ({s: w.s, e: w.e, text: w.w}),                       // what VideoHub shows (coded values, seconds)
+  (w, v) => ({...w, s: v.s, e: v.e, w: v.text ?? w.w}));      // the element with the edited values
+const MUSIC = vhOne('music', {lane: 'Music', kind: 'music'}, () => ({s: 0, e: END, file: 'audio/music.wav', duck: -3, fixedLen: true}));
+vhClip({lane: 'Voice + face', speech: () => WORDS_SPOKEN.map((w) => [w.s, w.e, w.text])});   // cuts snap / close pauses on these
+// render: <Vh of={w}> makes it clickable and applies nudge / size; the root plays the film minus the removed pieces
+<VhCut total={DURATION} keep={<Music />}>{words().map((w) => <Vh key={w.vh.vid} of={w}><ChromeWord …/></Vh>)}</VhCut>
+// Root.tsx: calculateMetadata={() => ({durationInFrames: vhDuration(DURATION, fps)})}
+```
+
+Kinds: `scene caption text graphic sfx music clip`. Sounds read `v.gain` (volume ×), `v.file` / `v.fdur` (a replaced
+file and its length), `v.duck` (music: dB under the voice); layers in `keep` run on through cuts and use `vhSrc(frame)`
+to know the uncut time. Element ids are `<list id>:<key>` (key = the view's `id`, else label, else text; repeats get
+`#2`): keep them stable when changing the code, or the user's edit for that element no longer applies.
+`vh-edits.json` = `{v, items: {id: {ds, de, text, text2, dx, dy, k, ox, oy, gain, duck, off, file, fdur, fname, base}},
+cuts: [{a, b}], splits: []}` — timings are deltas (seconds, uncut timeline), `base` records the coded values when the
+user changed it. Remotion Studio and renders read the file as bundled; VideoHub's preview loads the newest copy from the
+hub (`GET/PATCH /api/project/<id>/film-edits`). Claude may edit the file by hand (an open editor reloads it).
+A Remotion film without the edit layer plays and takes notes as before; its Sounds tab says that its sound is in its code.

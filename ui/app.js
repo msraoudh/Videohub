@@ -5,7 +5,7 @@ import { reviewPage } from './review.js';
 import { outputsPanel, outputActions } from './outputs-panel.js';
 import { activeRenders, elapsedSeconds, timeText, remainingText } from './render-status.js';
 import { thumbnailStudioPage } from './thumbstudio/page.js';
-import { NOTE_STATUS_LABEL, NOTE_KIND_LABEL, PROJECT_STATUS_LABEL, THUMB_STATUS_LABEL } from './values.js';
+import { NOTE_STATUS_LABEL, NOTE_KIND_LABEL, PROJECT_STATUS_LABEL, THUMB_STATUS_LABEL, SERIES_ORDER, guessSeries } from './values.js';
 
 // ---------- tiny helpers
 export const $ = (s, el = document) => el.querySelector(s);
@@ -190,7 +190,14 @@ function renderSpeedControl(c) {
 }
 
 // ---------- Projects
-const state ={ q: '', status: '', family: '', root: '', sort: 'updated' };
+const state ={ q: '', status: '', family: '', root: '', sort: 'updated', ...loadSeriesView() };
+// the series tab, the "hide finished" switch and the folded groups are remembered in this browser
+function loadSeriesView() { try { const v = JSON.parse(localStorage.getItem('vh.projects.series') || '{}'); return { series: v.series || '', hideDone: !!v.hideDone, folded: Array.isArray(v.folded) ? v.folded : [] }; } catch { return { series: '', hideDone: false, folded: [] }; } }
+function saveSeriesView() { try { localStorage.setItem('vh.projects.series', JSON.stringify({ series: state.series, hideDone: state.hideDone, folded: state.folded })); } catch { } }
+const seriesOf = p => p.series || guessSeries(p.name);
+const isFinished = p => !!p.rendered || ['published', 'done', 'archived'].includes(p.status);
+const seriesRank = s => { const i = SERIES_ORDER.indexOf(s); return s === 'Other' ? 1e3 : i < 0 ? 500 : i; };
+const sortSeries = names => names.sort((a, b) => seriesRank(a) - seriesRank(b) || a.localeCompare(b, 'en-US'));
 async function projectsPage(page) {
   const recent = outputsPanel({ compact: true });
   page.append(h('div', { class: 'row' }, h('h1', {}, 'Projects'), h('span', { class: 'spacer' }),
@@ -218,16 +225,41 @@ async function projectsPage(page) {
     sel('root', [['', 'All folders'], ...roots.map(r => [r, r.split(/[\\/]/).slice(-2).join('/')])]),
     sel('sort', [['updated', 'Recently updated'], ['size', 'Largest'], ['bloat', 'Most bloated'], ['notes', 'With open notes'], ['name', 'By name']]),
   ));
-  const grid = h('div', { class: 'grid' }); page.append(grid);
+  // series tabs + "hide finished": one group per series (DevOps FR, DevOps EN, Masterclass …), each can be folded
+  const tabs = h('div', { class: 'series-tabs' });
+  const hideBox = h('input', { type: 'checkbox', checked: state.hideDone, onchange: e => { state.hideDone = e.target.checked; saveSeriesView(); draw(); } });
+  page.append(h('div', { class: 'series-bar' }, tabs, h('span', { class: 'spacer' }),
+    h('label', { class: 'series-hide', title: 'Hide films that already have a final render, or are marked published / done / archived' }, hideBox, 'Hide rendered + published')));
+  const grid = h('div', { class: 'series-groups' }); page.append(grid);
   function draw() {
     thumbObserver.disconnect();
     const q = state.q.toLocaleLowerCase('en-US');
-    let list = ps.filter(p => (!q || (p.title + ' ' + p.label).toLocaleLowerCase('en-US').includes(q)) && (!state.status || p.status === state.status) && (!state.family || p.family === state.family) && (!state.root || p.root === state.root));
+    const base = ps.filter(p => (!q || (p.title + ' ' + p.label).toLocaleLowerCase('en-US').includes(q)) && (!state.status || p.status === state.status) && (!state.family || p.family === state.family) && (!state.root || p.root === state.root));
+    const shown = state.hideDone ? base.filter(p => !isFinished(p)) : base;
+    const count = {}; for (const p of shown) count[seriesOf(p)] = (count[seriesOf(p)] || 0) + 1;
+    const names = sortSeries([...new Set(ps.map(seriesOf))]);
+    if (state.series && !names.includes(state.series)) state.series = '';
+    tabs.innerHTML = '';
+    const tab = (v, t, n) => tabs.append(h('button', { class: 'series-tab' + (state.series === v ? ' on' : ''), onclick: () => { state.series = v; saveSeriesView(); draw(); } }, t, h('span', { class: 'n' }, String(n))));
+    tab('', 'All', shown.length);
+    for (const s of names) tab(s, s, count[s] || 0);
+    const list = shown.filter(p => !state.series || seriesOf(p) === state.series);
     const bloat = p => p.finalSize ? p.sizes.total / p.finalSize : 0;
     list.sort({ updated: (a, b) => b.updated - a.updated, size: (a, b) => b.sizes.total - a.sizes.total, bloat: (a, b) => bloat(b) - bloat(a), notes: (a, b) => b.notesOpen - a.notesOpen, name: (a, b) => a.title.localeCompare(b.title, 'en-US') }[state.sort]);
     grid.innerHTML = '';
-    if (!list.length) grid.append(h('div', { class: 'empty' }, 'No matching projects.'));
-    for (const p of list.slice(0, 300)) grid.append(projectCard(p));
+    const hidden = base.filter(p => !state.series || seriesOf(p) === state.series).length - list.length;
+    if (!list.length) grid.append(h('div', { class: 'empty' }, hidden ? `No matching projects (${hidden} rendered / published hidden).` : 'No matching projects.'));
+    const groups = new Map(); for (const p of list) { const s = seriesOf(p); if (!groups.has(s)) groups.set(s, []); groups.get(s).push(p); }
+    for (const s of sortSeries([...groups.keys()])) {
+      const items = groups.get(s), folded = !state.series && state.folded.includes(s);
+      const cards = h('div', { class: 'grid' });
+      if (!folded) for (const p of items.slice(0, 300)) cards.append(projectCard(p));
+      const head = h('button', { class: 'series-head', 'aria-expanded': String(!folded), title: state.series ? null : folded ? 'Show this series' : 'Fold this series',
+        onclick: () => { if (state.series) return; state.folded = folded ? state.folded.filter(x => x !== s) : [...state.folded, s]; saveSeriesView(); draw(); } },
+        state.series ? null : h('span', { class: 'chev' }, folded ? '▸' : '▾'), h('span', { class: 'name' }, s), h('span', { class: 'n' }, String(items.length)));
+      grid.append(h('section', { class: 'series-group' + (folded ? ' folded' : '') }, head, folded ? null : cards));
+    }
+    if (hidden && list.length) grid.append(h('div', { class: 'sub series-hidden' }, `${hidden} rendered / published ${hidden === 1 ? 'film' : 'films'} hidden.`));
   }
   draw();
   return () => { thumbObserver.disconnect(); recent.dispose(); };

@@ -93,10 +93,10 @@ export const TOOLS = {
     },
   },
   hub_project: {
-    description: 'Find this project in VideoHub (project folder, name or id). Gives its status, versions, open notes and render recipe (DUR, chunk length). `set` saves title / status / render recipe; render.mux is an ffmpeg argument array with {video} and {out} placeholders.',
+    description: 'Find this project in VideoHub (project folder, name or id). Gives its status, versions, open notes and render recipe (DUR, chunk length). `set` saves title / status / series / render recipe; series groups the film on the Projects page (e.g. "DevOps FR", "DevOps EN", "Masterclass"; "" goes back to the guess from the folder name); render.mux is an ffmpeg argument array with {video} and {out} placeholders.',
     schema: {
       project: z.string().optional().describe('Project folder, name or id. Default: the working folder.'),
-      set: z.object({ title: z.string().optional(), status: z.enum([...PROJECT_STATUSES, ...PROJECT_STATUS_ALIASES]).optional().describe('in-progress | review | revision | approved | published | archived | done'), render: z.object({ script: z.string().optional(), workers: z.number().optional(), env: z.record(z.string(), z.string()).optional(), mux: z.array(z.string()).optional() }).optional() }).optional(),
+      set: z.object({ title: z.string().optional(), series: z.string().optional().describe('Projects page group, e.g. "DevOps FR" | "DevOps EN" | "Masterclass" | any name; "" = guess from the folder name'), status: z.enum([...PROJECT_STATUSES, ...PROJECT_STATUS_ALIASES]).optional().describe('in-progress | review | revision | approved | published | archived | done'), render: z.object({ script: z.string().optional(), workers: z.number().optional(), env: z.record(z.string(), z.string()).optional(), mux: z.array(z.string()).optional() }).optional() }).optional(),
     },
     run: async a => {
       let p = await resolve(a.project);
@@ -106,7 +106,7 @@ export const TOOLS = {
       const open = (p.notes || []).filter(isOpen);
       return [
         `Project: ${p.title} (id ${p.id})  ·  ${p.path}`,
-        `Kind: ${FAM[p.family] || p.family}  ·  status: ${projectStatus(p.status)}${p.statusAuto ? ' (automatic)' : ''}`,
+        `Kind: ${FAM[p.family] || p.family}  ·  status: ${projectStatus(p.status)}${p.statusAuto ? ' (automatic)' : ''}  ·  series: ${p.series || '—'}${p.seriesAuto ? ' (from the folder name)' : ''}`,
         rc ? `Render: ${rc.script || 'make.mjs'}, ${rc.fps} fps${rc.chunkSec ? `, ${rc.chunkSec} s chunks (${rc.chunks ?? '?'} chunks)` : ''}${rc.env?.DUR ? `, DUR=${rc.env.DUR}${rc.durInferred ? ' (worked out from the chunks)' : ''}` : ''}${rc.mux ? ', own sound recipe (render.mux)' : ', sound: the previous final\'s track, else the film\'s own audio file'}` : '',
         `Latest video: ${p.latest || '—'}  ·  folder ${GB(p.sizes?.total || 0)}`,
         vs.length ? 'Latest versions: ' + vs.map(v => `v${v.v} ${v.file}${v.changedRanges ? ` (changed: ${v.changedRanges.map(([x, y]) => TC(x) + '–' + TC(y)).join(', ')})` : ''}`).join(' | ') : '',

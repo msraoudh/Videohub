@@ -1,0 +1,6 @@
+# personal runtime data (your films, jobs, settings, thumbnails)
+data/
+.test-tmp/
+node_modules/
+gpu-window/node_modules/
+gpu-window/gpu-report.json

@@ -11,7 +11,7 @@
 import { h } from '../app.js';
 import { createView } from './tlview.js';
 import { ls } from './dock.js';
-import { buildRows, tickSpec, fmtTick, clipLen, assignLane, findDragSnap, snapEdgeTime, edgeScrollStep } from './tracks.js';
+import { buildRows, tickSpec, fmtTick, clipLen, assignLane, findDragSnap, snapEdgeTime, edgeScrollStep, COLLAPSED_H } from './tracks.js';
 
 const STATUS_COLOR = { 'open': '#e6c14d', claude: '#f08a3c', 'fixed': '#46c480', 'approved': '#3a7d58', 'reopened': '#e85454' };
 const RULER = 24, PLAY = '#ff5c6c', ROWS_KEY = 'vh-tl-rows';
@@ -45,6 +45,9 @@ export function createTimeline(ctx) {
   let strip = null, stripImg = null, waveImg = null, tr = null, layers = [], cues = null, scenes = [], selScene = -1;
   let mixer = null, clips = null, clipSel = null, clipHooks = {}, clipOps = null, clipDrag = null, clipHover = null, dragging = null, hoverX = null, hoverRow = null;
   let bands = [], bandOps = null, bandDrag = null, dropAt = null;   // P4: music-level bands on the Music row; a drop's target
+  // extra rows drawn by an editor (the film editor's lanes): { rows(), draw(g, r, T), down(e, x, y, r, T) → handled,
+  // move(e, x, y, T), up(e, T, cancelled), hover(x, y, r, T) → cursor, tip(x, y, r, T) → text, dbl(x, y, r, T) }
+  let ext = null, extDrag = false;
   const layerImg = {}, peaks = new Map(), waveCache = new Map(), asked = new Set();
   let collapsed = new Set(ls.get(ROWS_KEY, []) || []), rows = [], H = 40, headEls = new Map();
   const dur = () => ctx.dur() || 1;
@@ -59,6 +62,8 @@ export function createTimeline(ctx) {
   const xt = x => v()[0] + Math.max(0, Math.min(1, x / W())) * (v()[1] - v()[0]);
   const pps = () => W() / (v()[1] - v()[0]);
   const rowOf = id => rows.find(r => r.id === id) || null;
+  // what an editor's lanes get: the view's mapping and the player
+  const T = { tx: t => tx(t), xt: x => xt(x), pps: () => pps(), W: () => W(), dur: () => dur(), time: () => ctx.time(), fps: () => ctx.fps(), seek: t => ctx.seek(t), pause: () => ctx.pause?.(), draw: () => draw(), view: () => v() };
   const rowAt = y => rows.find(r => y >= r.y && y < r.y + r.h) || null;
   const colorOf = (sc, i) => { const k = sc.set || sc.name; let hsh = 0; for (const c of String(k)) hsh = (hsh * 31 + c.charCodeAt(0)) >>> 0; return SCENE_COLORS[(sc.set ? hsh : i) % SCENE_COLORS.length]; };
   const on = id => ctx.layerOn ? ctx.layerOn(id) : true;
@@ -68,6 +73,11 @@ export function createTimeline(ctx) {
     // an old clip without a lane gets one once (timestamp order); it is saved with it on the next real change
     if (clips) for (const c of clips.filter(q => !Number.isInteger(q.lane)).sort((p, q) => p.t - q.t)) c.lane = assignLane(clips, c, dur());
     rows = buildRows({ live: !!ctx.live, strip, scenes, transcript: tr, layers, cues, clips, canClips: !!clips, collapsed });
+    if (ext) {   // the editor's lanes right under Notes
+      const er = (ext.rows() || []).map(r => ({ ...r, kind: 'ext', full: r.h, collapsed: collapsed.has(r.id), h: collapsed.has(r.id) ? COLLAPSED_H : r.h, header: null }));
+      const at = rows.findIndex(r => r.kind === 'notes'); rows.splice(at >= 0 ? at + 1 : rows.length, 0, ...er);
+      let y = 0; for (const r of rows) { r.y = y; y += r.h; }
+    }
     H = Math.max(20, rows.reduce((s, r) => s + r.h, 0));
     heads.innerHTML = ''; headEls = new Map();
     for (const r of rows) {
@@ -77,7 +87,8 @@ export function createTimeline(ctx) {
       const add = r.kind === 'clips' && clipOps?.pick && r.h >= 26 ? h('button', { class: 'tl2-hadd', title: r.clipKind === 'music' ? 'Add music (at the playhead)' : 'Add sound effect (at the playhead)', onclick: () => clipOps.pick(r.clipKind) }, '➕') : null;
       // P3c: M / S / level chip from the mixer (they update themselves); rows under 26 px have none
       const mx = mixer && r.header && r.h >= 26 ? mixer.controls(r.id) : null;
-      const hd = h('div', { class: 'tl2-head' + (r.collapsed ? ' coll' : '') + (r.h < 26 ? ' small' : ''), 'data-id': r.id }, name, add || mx ? h('span', { class: 'tl2-hside' }, add, mx) : null);
+      const xs = r.kind === 'ext' && r.side && r.h >= 20 ? r.side : null;   // an editor lane's own header buttons
+      const hd = h('div', { class: 'tl2-head' + (r.collapsed ? ' coll' : '') + (r.h < 26 ? ' small' : '') + (r.kind === 'ext' ? ' ext' : ''), 'data-id': r.id }, name, add || mx || xs ? h('span', { class: 'tl2-hside' }, add, mx, xs) : null);
       hd.style.height = r.h + 'px'; hd.style.setProperty('--c', r.color);
       heads.append(hd); headEls.set(r.id, { el: hd, off: false });
     }
@@ -152,7 +163,7 @@ export function createTimeline(ctx) {
       g.fillStyle = i % 2 ? '#14151a' : '#17181e'; g.fillRect(0, r.y, w, r.h);
       const dim = r.kind === 'layer' && !on(r.id);
       const he = headEls.get(r.id); if (he && he.off !== dim) { he.off = dim; he.el.classList.toggle('off', dim); }
-      ({ pic: drawPic, mix: drawMix, scenes: drawScenes, notes: drawNotes, text: drawText, layer: drawLayer, cues: drawLayer, clips: drawClips })[r.kind]?.(r, a, b, now, dim);
+      ({ pic: drawPic, mix: drawMix, scenes: drawScenes, notes: drawNotes, text: drawText, layer: drawLayer, cues: drawLayer, clips: drawClips, ext: r2 => ext?.draw(g, r2, T) })[r.kind]?.(r, a, b, now, dim);
       if (r.id === 'music' && bands.length) drawBands(r);
       g.restore();
       g.fillStyle = '#0d0e12'; g.fillRect(0, r.y + r.h - 1, w, 1);
@@ -472,6 +483,7 @@ export function createTimeline(ctx) {
     capture(cv, e);
     const x = xOf(e), y = yOf(e), t = xt(x), r = rowAt(y);
     if (!r) return scrub(t);
+    if (r.kind === 'ext') { if (ext && !r.collapsed && ext.down(e, x, y, r, T)) { extDrag = true; draw(); return; } return scrub(t); }
     if (r.kind === 'notes') {
       const gr = groupAt(x, r);
       if (gr) {   // a note marker; a group steps to its next note on every click
@@ -583,6 +595,11 @@ export function createTimeline(ctx) {
   const CURSOR = { body: 'grab', trimL: 'ew-resize', trimR: 'ew-resize', fin: 'col-resize', fout: 'col-resize' };
   cv.addEventListener('pointermove', e => {
     const x = xOf(e), y = yOf(e), r = rowAt(y); hoverX = x; hoverRow = r?.id || null;
+    if (extDrag && ext) { ext.move(e, x, y, T); const tt = ext.tip?.(x, y, r, T); if (tt) showTip(cv, x, r ? r.y : 0, r ? r.y + r.h : H, () => { tipTxt.textContent = tt; stripTip(xt(x)); }); draw(); return; }
+    if (r?.kind === 'ext' && ext && !dragging) {
+      cv.style.cursor = ext.hover?.(x, y, r, T) || 'ew-resize';
+      showTip(cv, x, r.y, r.y + r.h, () => { tipTxt.textContent = ext.tip?.(x, y, r, T) || `${r.label} · ${tcs(xt(x))}`; stripTip(xt(x)); }); draw(); return;
+    }
     if (bandDrag) {   // a duck edge: snaps like clips (Shift: exact), never past the other edge
       const raw = Math.max(0, Math.min(dur(), xt(x))), nt = e.shiftKey ? raw : snapEdgeTime(raw, snapCands(null), pps(), 12);
       if (bandDrag.part === 't0') bandDrag.t0 = Math.min(nt, bandDrag.t1 - 0.05); else bandDrag.t1 = Math.max(nt, bandDrag.t0 + 0.05);
@@ -596,11 +613,12 @@ export function createTimeline(ctx) {
     cv.style.cursor = bh ? (bh.part === 'body' ? 'pointer' : 'ew-resize') : clipDrag ? (clipDrag.mode === 'move' ? 'grabbing' : CURSOR[clipDrag.mode]) : hit ? CURSOR[hit.part] :dragging ? 'ew-resize' : groupAt(x, r) || sceneAt(x, r) || cueNear(x, r) || r?.kind === 'text' ? 'pointer' : 'ew-resize';
     showTip(cv, x, r ? r.y : 0, r ? r.y + r.h : H, () => { if (clipDrag?.moved) { tipTxt.textContent = clipDrag.info || ''; stripTip(clipDrag.ghost?.t ?? xt(x)); } else fillRowTip(x, y, r); }); draw();
   });
-  cv.addEventListener('pointerup', () => {
+  cv.addEventListener('pointerup', e => {
+    if (extDrag) { extDrag = false; tip.hidden = true; ext?.up(e, T, false); draw(); return; }
     if (bandDrag) { const D = bandDrag; bandDrag = null; if (D.moved) bandOps?.set(D.shot, { t0: Math.round(D.t0 * 1000) / 1000, t1: Math.round(D.t1 * 1000) / 1000 }); draw(); return; }
     if (clipDrag?.moved) tip.hidden = true; endClipDrag(true); dragging = null; draw();   // the drag's tip is stale now
   });
-  cv.addEventListener('pointercancel', () => { bandDrag = null; endClipDrag(false); dragging = null; draw(); });
+  cv.addEventListener('pointercancel', e => { if (extDrag) { extDrag = false; ext?.up(e, T, true); } bandDrag = null; endClipDrag(false); dragging = null; draw(); });
 
   // ---- drop a sound from the library (application/x-vh-sound) or Explorer (Files) onto the rows (P4)
   const canDrop = e => [...(e.dataTransfer?.types || [])].some(t => t === 'application/x-vh-sound' || t === 'Files');
@@ -632,6 +650,7 @@ export function createTimeline(ctx) {
   // double-click: a fade square → no fade; a clip → nothing; elsewhere → the whole film
   cv.addEventListener('dblclick', e => {
     const x = xOf(e), y = yOf(e), r = rowAt(y), hit = r?.kind === 'clips' ? clipHit(x, y, r) : null;
+    if (r?.kind === 'ext') { ext?.dbl?.(x, y, r, T); return; }
     if (hit) { if ((hit.part === 'fin' || hit.part === 'fout') && clipOps) { clipOps.begin?.(); clipOps.move?.(hit.c.id, { [hit.part]: 0 }); clipOps.end?.(); } return; }
     V.fit();
   });
@@ -700,6 +719,9 @@ export function createTimeline(ctx) {
     bandSelected: () => bands.find(e => e.sel) || null,
     setPeaks(id, P) { if (P && P.data) peaks.set(id, P); else peaks.delete(id); waveCache.delete(id); draw(); },
     setRowsChanged() { relayout(); },
+    // an editor's own lanes (see `ext` above); null removes them. extChanged(): their number or heights changed
+    setExt(provider) { ext = provider || null; extDrag = false; relayout(); },
+    extChanged() { if (ext) relayout(); },
     rows: () => rows.map(r => ({ id: r.id, label: r.label, h: r.h, y: r.y, collapsed: r.collapsed })),
     destroy() { ro.disconnect(); offView(); tip.remove(); },
   };

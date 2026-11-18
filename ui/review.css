@@ -428,3 +428,46 @@
 .tl2-ms { width: 26px; height: 24px; font-size: 12px; border-radius: 6px; }
 .tl2-lvl { height: 24px; line-height: 22px; border-radius: 6px; }
 .tl2-hname { font-size: 12px; }
+
+/* film editor (ui/review/filmedit.js): Remotion films with the edit layer */
+.rv2-top .fe-btn { background: #2a2140; border-color: #7b5fc4; color: #e4dcff; font-weight: 600; }
+.rv2-top .fe-btn.on { background: #7b5fc4; color: #fff; }
+.fe-ov { position: absolute; inset: 0; z-index: 6; touch-action: none; outline: 2px solid #7b5fc4; outline-offset: -2px; }
+.fe-box { position: absolute; pointer-events: none; border-radius: 4px; }
+.fe-hover { border: 1.5px dashed rgba(255,255,255,.8); background: rgba(255,255,255,.05); }
+.fe-sel { border: 2px solid #25d0c2; background: rgba(37,208,194,.08); box-shadow: 0 0 0 1px rgba(0,0,0,.6); }
+.fe-sel .fe-tag { position: absolute; left: -2px; bottom: 100%; margin-bottom: 3px; font: 600 11px var(--sans, 'Segoe UI'); color: #06201d; background: #25d0c2; padding: 1px 6px; border-radius: 4px; white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+.fe-handle { position: absolute; right: -7px; bottom: -7px; width: 12px; height: 12px; background: #25d0c2; border: 2px solid #06201d; border-radius: 3px; pointer-events: auto; cursor: nwse-resize; }
+.fe-textin { position: absolute; z-index: 8; min-width: 220px; max-width: 95%; font-size: 15px; font-weight: 600; background: rgba(10,12,16,.94); color: #fff; border: 2px solid #25d0c2; border-radius: 6px; padding: 4px 8px; }
+.fe-panel { display: grid; gap: 8px; padding: 8px 10px 12px; font-size: 12.5px; }
+.rv2-side .fe-panel { overflow: auto; max-height: 100%; }
+.fe-head { display: flex; align-items: center; gap: 6px; }
+.fe-head .spacer { flex: 1; }
+.fe-st { font-size: 11px; }
+.fe-card { background: var(--card, #1b1d23); border: 1px solid var(--border, #2a2d36); border-radius: 9px; padding: 8px 9px; display: grid; gap: 6px; }
+.fe-title { font-weight: 600; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.fe-pill { font-size: 10px; background: #3b3311; color: #ffd83d; border: 1px solid #6a5a12; }
+.fe-row { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.fe-lab { width: 72px; flex: none; color: var(--muted, #9aa0ad); font-size: 11.5px; }
+.fe-sm { padding: 2px 7px; font-size: 11.5px; min-height: 0; }
+.fe-time { width: 74px; font: 12px var(--mono, monospace); padding: 2px 5px; }
+.fe-text { flex: 1; min-width: 120px; padding: 3px 6px; font-size: 13px; }
+.fe-range { flex: 1; min-width: 90px; accent-color: #25d0c2; }
+.fe-val { width: 62px; text-align: right; font: 11.5px var(--mono, monospace); color: var(--accent, #25d0c2); }
+.fe-sub { font-size: 11px; }
+.fe-chk { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; cursor: pointer; }
+.fe-help { font-size: 11px; line-height: 1.45; }
+.fe-cuts { display: grid; gap: 3px; }
+.fe-cut { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 2px 4px; border-radius: 5px; font: 11.5px var(--mono, monospace); cursor: pointer; }
+.fe-cut:hover, .fe-cut.on { background: rgba(229,72,77,.15); }
+.fe-libbox { display: grid; gap: 5px; border-top: 1px solid var(--border, #2a2d36); padding-top: 6px; }
+.fe-libbox select { max-width: 130px; }
+.fe-lib { max-height: 260px; overflow: auto; display: grid; gap: 2px; }
+.fe-libitem { display: flex; align-items: center; gap: 5px; font-size: 12px; padding: 1px 0; }
+.fe-libname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fe-list { margin: 4px 0 0 16px; padding: 0; font: 12px var(--mono, monospace); }
+.tl2-head.ext .tl2-hname { font-weight: 600; }
+.fe-soundnote { display: grid; gap: 6px; background: #221c33; border: 1px solid #5b4a92; border-radius: 9px; padding: 9px 10px; margin-bottom: 8px; font-size: 12.5px; }
+.fe-soundnote button { justify-self: start; }
+.fe-lanebtns { display: inline-flex; gap: 3px; }
+.fe-lanebtns .fe-cutbtn { width: auto; padding: 0 5px; font-size: 10.5px; color: #ffb4b4; border-color: #6b2a2d; }

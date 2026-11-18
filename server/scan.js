@@ -8,6 +8,7 @@ import { config, DEFAULT_SKIP_FOLDERS } from './config.js';
 import { outputsDir } from './ciktilar-dir.js';
 import { invalidateSource } from './source-revision.js';
 import { readNotes, readMeta, isOpenNote } from './legacy.js';
+import { guessSeries } from '../ui/values.js';
 import { DATA_DIR, idOf, readJson, writeJson, probe, flushProbeCache, fingerprint, pLimit, shortPath, run, TOOLS, now } from './util.js';
 
 const VIDEO = /\.(mp4|mov|webm|mkv)$/i, IMAGE = /\.(jpe?g|png|webp)$/i, AUDIO = /\.(wav|mp3|m4a|flac|aac|ogg)$/i;
@@ -184,6 +185,8 @@ async function describe(project) {
     family: family || 'other',
     render: ri,
     status, statusAuto: !meta.status, meta,
+    series: meta.series || guessSeries(project.name), seriesAuto: !meta.series,
+    rendered: finals.length > 0,
     sizes,
     outputs: outs.map(o => ({ path: o.path, rel: o.rel, name: o.name, size: o.size, mtime: o.mtime, role: o.role, coveredBy: o.coveredBy || null, ...(o.info || {}) })),
     latest: latest ? latest.rel : null,
@@ -263,7 +266,8 @@ async function describeGroup(p) {
   await pLimit(files, 4, async o => { o.info = await probe(o.path, { size: o.size, mtimeMs: o.mtime }); o.role = roleOf(o); });
   files.sort((a, b) => b.mtime - a.mtime);
   const total = files.reduce((s, f) => s + f.size, 0), latest = files.find(f => f.role === 'final') || files[0];
-  return { ...p, title: p.name, render: { family: p.family }, status: 'published', meta: {}, sizes: { total, output: total }, outputs: files.map(o => ({ path: o.path, rel: o.rel, name: o.name, size: o.size, mtime: o.mtime, role: o.role, coveredBy: null, ...(o.info || {}) })), latest: latest?.rel, finalSize: latest?.size || 0, notesOpen: 0, notesTotal: 0, versions: 0, counts: { files: files.length }, updated: files[0]?.mtime || 0 };
+  const gm = readMeta(path.join(DATA_DIR, 'meta', p.id + '.json'), {});   // a group's meta lives in the hub's data folder
+  return { ...p, title: p.name, render: { family: p.family }, status: 'published', meta: {}, series: gm.series || guessSeries(p.name), seriesAuto: !gm.series, rendered: files.some(f => f.role === 'final'), sizes: { total, output: total }, outputs: files.map(o => ({ path: o.path, rel: o.rel, name: o.name, size: o.size, mtime: o.mtime, role: o.role, coveredBy: null, ...(o.info || {}) })), latest: latest?.rel, finalSize: latest?.size || 0, notesOpen: 0, notesTotal: 0, versions: 0, counts: { files: files.length }, updated: files[0]?.mtime || 0 };
 }
 
 let state = { scanning: false, at: null, projects: readJson(INDEX, { projects: [] }).projects || [], dups: [] };

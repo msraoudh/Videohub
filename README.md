@@ -1,5 +1,30 @@
 # VideoHub
 
+> **This is msraoudh's version of VideoHub**, a fork of [TensaikunYT/Videohub](https://github.com/TensaikunYT/Videohub) (MIT licence — all credit for the app goes to its authors). It adds:
+> - **Remotion films in VideoHub**: the Remotion bridge (`templates/remotion-bridge`) plays any Remotion composition in the live preview, without rendering — seek, frame-step, sound, notes.
+> - **Film editor for Remotion films** (`server/filmedit.js`, `ui/review/filmedit.js`, `templates/remotion-bridge/vh-edit.tsx`): move, trim and re-order shots and sounds of a bridged film from the review page; the changes go to `src/vh-edits.json` in the Remotion project.
+> - **Timeline & review improvements**: scene lane, live-preview fixes, sound picker from the global-video-styles library.
+> - **GPU window** (`gpu-window/`, optional): VideoHub in its own Electron window that uses the dedicated graphics card, for smooth live preview on PCs where the browser runs without hardware acceleration.
+>
+> ### Install it in one sentence
+> Open **Claude Code** (Claude Desktop → Code tab, or the terminal) in any folder and say:
+>
+> **« Télécharge et installe VideoHub depuis https://github.com/msraoudh/Videohub : clone-le dans Documents\VideoHub-app, puis suis le CLAUDE.md du repo pour l'installer (pose-moi les questions), installe aussi le Remotion bridge et la fenêtre GPU. »**
+>
+> In English: *"Download and install VideoHub from https://github.com/msraoudh/Videohub: clone it into Documents\VideoHub-app, then follow the repo's CLAUDE.md to install it (ask me the questions), and also set up the Remotion bridge and the GPU window."*
+>
+> ### Install by hand (Windows)
+> 1. Requirements: Node.js 22+, ffmpeg, Chrome or Edge, Git. (`winget install -e --id OpenJS.NodeJS.LTS`, `winget install -e --id Gyan.FFmpeg`, `winget install -e --id Git.Git`)
+> 2. Download: `git clone https://github.com/msraoudh/Videohub "%USERPROFILE%\Documents\VideoHub-app"`
+> 3. Install: double-click **SETUP.cmd** in that folder (or `node scripts\install.mjs setup`), answer the questions. The default workspace is `Documents\VideoHub`.
+> 4. Remotion bridge: copy the folder `templatesemotion-bridge` into `<workspace>	emplates\` (e.g. `Documents\VideoHub	emplatesemotion-bridge`). Then, for any Remotion project:
+>    `node "%USERPROFILE%\Documents\VideoHub	emplatesemotion-bridgeuild.mjs" --project "<Remotion project folder>" --composition <CompositionId> --name <film-name>`
+>    and open it in VideoHub (its card on the Projects page). Details: `templates/remotion-bridge/README.md`.
+> 5. GPU window (optional): double-click `gpu-window\VideoHub-GPU.cmd` (the first time it runs `npm install` there to download Electron, ~330 MB).
+> 6. Open VideoHub from the Desktop shortcut or **open.cmd**. Start a new Claude Code session so it gets the `hub_*` tools.
+>
+> Update later: download the new version and run **UPDATE.cmd** from it (your films, notes and settings are kept).
+
 **A local review studio and render queue for videos that Claude Code or OpenCode writes as code.**
 Ask your agent for a video. It builds a film as a web page that draws every frame in code. VideoHub plays the film straight from its code, so you can watch it, step through frames, draw and leave notes before rendering. Send the notes back to your agent, review the fixes in the reloading preview, then render when you are ready. The queue keeps the computer usable and can re-render only the seconds that changed.
 

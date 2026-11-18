@@ -47,7 +47,18 @@ export function normalizeNote(n) {
 export const normalizeNotes = (arr) => (Array.isArray(arr) ? arr.map(normalizeNote) : arr);
 export function normalizeMeta(m) {
   if (m && typeof m === 'object' && m.status !== undefined) m.status = projectStatus(m.status);
+  if (m && typeof m === 'object' && 'series' in m) { const v = typeof m.series === 'string' ? m.series.trim() : ''; if (v) m.series = v; else delete m.series; }   // "" clears it: the name guess comes back
   return m;
+}
+
+// a film's series (Projects page groups): project.json → series, else guessed from the folder name
+export const SERIES_ORDER = ['DevOps FR', 'DevOps EN', 'Masterclass', 'Other'];
+export function guessSeries(name) {
+  const n = String(name || '').toLowerCase();
+  if (/^devops-ep\d+-en$/.test(n)) return 'DevOps EN';
+  if (/^devops-ep\d+$/.test(n)) return 'DevOps FR';
+  if (/^masterclass-/.test(n)) return 'Masterclass';
+  return 'Other';
 }
 
 // labels the UI shows

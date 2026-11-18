@@ -12,6 +12,7 @@ import { createMixer } from './review/mixer.js';
 import { scenesFromPage } from './review/scenes.js';
 import { createSoundEditor } from './review/soundedit.js';
 import { createEdit2d } from './review/edit2d.js';
+import { createFilmEditor } from './review/filmedit.js';
 import { createAutoScan } from './review/autoscan.js';
 import { createRenderButton } from './review/renderbtn.js';
 import { createSplitter, fitRow, openPop } from './review/dock.js';
@@ -84,10 +85,11 @@ export async function reviewPage(page, id, relArg = '') {
   // (each domain keeps its own stack; a tag whose domain has nothing left is skipped). Scene / 2D have no redo.
   let undoOrder = [], redoOrder = [];
   let mixer = null;   // the live mixer (ui/review/mixer.js): channel levels, M/S, master; built with the sound rows
+  let filmEd = null;  // the film editor (ui/review/filmedit.js): Remotion films with the edit layer (vh-edit.tsx)
   const pushTag = tag => { undoOrder.push(tag); if (undoOrder.length > 400) undoOrder.shift(); redoOrder = []; };
   const dropLastTag = tag => { const i = undoOrder.lastIndexOf(tag); if (i >= 0) undoOrder.splice(i, 1); };   // an editor's own ↶ button undid its newest step
   const dropTags = tag => { undoOrder = undoOrder.filter(t => t !== tag); redoOrder = redoOrder.filter(t => t !== tag); };
-  const undoDomains = () => ({ draw: { undo: () => undo(), redo: () => redo() }, clips: soundEd && { undo: () => soundEd.undo(), redo: () => soundEd.redo() }, sound: mixer && { undo: () => mixer.undo(), redo: () => mixer.redo() }, scene: sceneEd && { undo: () => sceneEd.undo() }, '2d': edit2d && { undo: () => edit2d.undo() } });
+  const undoDomains = () => ({ draw: { undo: () => undo(), redo: () => redo() }, clips: soundEd && { undo: () => soundEd.undo(), redo: () => soundEd.redo() }, film: filmEd && { undo: () => filmEd.undo(), redo: () => filmEd.redo() }, sound: mixer && { undo: () => mixer.undo(), redo: () => mixer.redo() }, scene: sceneEd && { undo: () => sceneEd.undo() }, '2d': edit2d && { undo: () => edit2d.undo() } });
   function routeUndo() {
     const D = undoDomains();
     while (undoOrder.length) { const tag = undoOrder.pop(); if (D[tag]?.undo()) { if (D[tag].redo) redoOrder.push(tag); return; } }
@@ -256,6 +258,24 @@ export async function reviewPage(page, id, relArg = '') {
   // timeline (built before the transport: the transport's zoom controls drive the timeline's view)
   let layerLabels = [], soundEd = null;   // sound layer names (set once loaded), added sounds
   const timeline = createTimeline({ overlayHost: () => rv2, live: !!liveSrc, pause: () => { if (shuttle.speed()) shuttle.stop(); else { videoA.pause(); videoB.pause(); } }, needPeaks: src => loadWave(src, p.path + '/' + src, false), layerOn: lid => mixer ? mixer.audible(lid) : true, dur: () => dur(), time: () => liveSrc?.displayedTime ?? videoA.currentTime, fps, chunkSec, notes: () => notes, selected: () => S.selected, range: () => S.range, loopOn: () => S.loopOn, setRange: (a, b) => setRange(a, b), changed: () => versionInfo()?.changedRanges, seek: t => seek(t), selectNote: nid => selectNote(nid), onDrop: d => soundEd?.dropAdd(d) });
+
+  // the film editor: every element of a Remotion film as a block on its own lane, texts on the picture, sound, cuts
+  filmEd = liveSrc ? createFilmEditor({ src: liveSrc, projectId: id, frame: frameA, ...edHost('film', '🎬 Film'), history: { push: () => pushTag('film'), undone: () => dropLastTag('film') },
+    keysActive, timeline, fps, seek: t => seek(t), pause: () => { if (!videoA.paused) videoA.pause(); }, range: () => rangeOk() ? rangeSec() : null, clearRange: () => clearRange(), time: () => liveSrc.displayedTime ?? 0,
+    reloadLive: () => liveSrc.reload() }) : null;
+  if (filmEd) { top.insertBefore(pri(8, filmEd.el), sceneEd ? sceneEd.el : thumbBtn); filmEd.el.classList.add('rv2-ed'); }
+  // a Remotion film plays its own sound (no mix file): the Sounds tab's channels and added sounds do not reach it; say
+  // where its sound is changed (the film editor) instead of showing controls that do nothing
+  const filmSound = h('div', { class: 'fe-soundnote', hidden: true });
+  if (liveSrc) liveSrc.addEventListener('loadedmetadata', () => {
+    let br = null; try { br = liveSrc.win?.VH_BRIDGE || null; } catch { }
+    filmSound.hidden = !br;
+    if (!br) return;
+    filmSound.replaceChildren(h('b', {}, '🎬 Film sound'), h('div', { class: 'dim' }, br.edit
+      ? 'This film makes its own sound in its code (Remotion). Change it in the film editor: music level and ducking under the voice, every SFX (move, volume, mute, replace from the library) and cuts of the clip. The channels below do not act on this film.'
+      : 'This film makes its own sound in its code (Remotion): the channels below do not act on it. Ask Claude to add the edit layer (vh-edit.tsx) to edit its sound here.'),
+      br.edit && filmEd ? h('button', { class: 'primary', onclick: () => { filmEd.open(); } }, '🎬 Open the film editor') : null);
+  });
 
   // transport: one row (ui/review/transport.js); nothing in this ctx is called while it is built
   let trData = null, ccOn = false; try { ccOn = localStorage.getItem('vh-cc') === '1'; } catch { }
@@ -936,6 +956,7 @@ export async function reviewPage(page, id, relArg = '') {
   // P4: the sound library at the top of the Sounds tab (▶ listen, + at the playhead, drag onto the timeline)
   const library = createLibrary({ onAdd: item => soundEd?.dropAdd({ item, t: nowT() }), onFile: () => soundEd?.pickFile() });
   soundsHost.prepend(library.el);
+  soundsHost.prepend(filmSound);
   // files dragged from your file manager and dropped anywhere but the timeline would make the window open the file
   const dropGuard = e => { if (![...(e.dataTransfer?.types || [])].includes('Files') || e.target?.closest?.('.tl2-body')) return; e.preventDefault(); if (e.type === 'dragover') e.dataTransfer.dropEffect = 'none'; else toast('Drop the sound file onto the timeline'); };
   document.addEventListener('dragover', dropGuard); document.addEventListener('drop', dropGuard);
@@ -1086,7 +1107,7 @@ export async function reviewPage(page, id, relArg = '') {
     shuttle.stop({ pause: false }); transport.destroy();
     ro2.disconnect(); cancelAnimationFrame(clampRaf); topFit.destroy(); dockSplit.destroy(); sideSplit.destroy(); styleMenu?.close(); side.destroy();
     appEl?.classList.remove('app-editor', 'side-peek'); mainEl?.classList.remove('main-editor');
-    offTips(); ro.disconnect(); timeline.destroy(); clearInterval(diffTimer); offProxy(); offLive(); offNote(); renderBtn?.destroy(); sceneEd?.destroy(); scanner?.destroy(); mixer?.destroy(); mixer = null; soundEd?.destroy(); soundEd = null; edit2d?.destroy(); liveCover?.destroy(); liveSrc?.destroy();
+    offTips(); ro.disconnect(); timeline.destroy(); clearInterval(diffTimer); offProxy(); offLive(); offNote(); renderBtn?.destroy(); sceneEd?.destroy(); filmEd?.destroy(); scanner?.destroy(); mixer?.destroy(); mixer = null; soundEd?.destroy(); soundEd = null; edit2d?.destroy(); liveCover?.destroy(); liveSrc?.destroy();
     videoA.pause(); videoA.removeAttribute('src'); videoA.load(); videoB.pause(); videoB.removeAttribute('src'); videoB.load();
     page.classList.remove('page-wide', 'page-editor');
   };

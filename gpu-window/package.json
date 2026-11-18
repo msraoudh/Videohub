@@ -1,0 +1,9 @@
+{
+  "name": "videohub-gpu-window",
+  "private": true,
+  "description": "VideoHub in its own window on the dedicated GPU (Electron).",
+  "main": "main.cjs",
+  "dependencies": {
+    "electron": "40.10.2"
+  }
+}

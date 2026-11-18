@@ -97,6 +97,16 @@ A film's `tweaks.json` holds edits the user makes in VideoHub: `sound` (levels, 
 keys when you edit the film; read them when a note mentions something the code does not draw. "Make permanent" = move
 an entry into the film's code and remove it from `tweaks.json`.
 
+**Remotion films (the bridge's edit layer).** A Remotion film played through the VideoHub Remotion bridge can carry the
+edit layer: `src/vh-edit.tsx` (VideoHub's helper, installed with `build.mjs --init-edit`) and `src/vh-edits.json`
+(the user's edits). The user's 🎬 Edit film changes (blocks moved / trimmed, texts retyped, elements nudged or
+resized, SFX volume / mute / replaced, music level and ducking, pieces of the clip removed) are saved there as
+overrides keyed by element id (`chrome:OUTLOOK`, `sfx:card_ping#3`, `cap:hook`…); renders read the file too. Read it
+before changing such a film; keep element ids stable (the key a `vhList` gives an element: its `id`, else label/text);
+never delete the file or entries the user made. "Make permanent" = put the value in the code and drop the entry.
+New Remotion films: build editable elements through `vhList` / `vhOne`, wrap them in `<Vh of={…}>`, the root in
+`<VhCut>` (see the bridge README and docs/PROJECT-CONTRACT.md §5.6).
+
 ## Thumbnails
 The user lays a thumbnail out in VideoHub → Thumbnail and presses **Send to your agent**, which copies a message starting
 `VideoHub Thumbnail: "…"`. Then: `hub_thumb_brief({id})` → Read `sketch.png` (annotated) and `layout.png` (the

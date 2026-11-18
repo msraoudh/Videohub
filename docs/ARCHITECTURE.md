@@ -33,6 +33,7 @@ What film projects must look like is in [PROJECT-CONTRACT.md](PROJECT-CONTRACT.m
 | `server/tools.js` | The `hub_*` tools. |
 | `server/transcript.js`, `layers.js`, `scenes.js` | Narration text, sound stems + cues, scene lane. |
 | `server/tweaks.js`, `sound.js`, `vhsound.mjs`, `soundedit.js`, `sfxlib.mjs`, `edit2d.js` | The film's `tweaks.json` (one writer), mix rebuilds, added sound clips, ready-made effects, 2D layers. |
+| `server/filmedit.js`, `ui/review/filmedit.js` | Film editor for Remotion bridge films: the project's `src/vh-edits.json` (read, patch, watch), the SFX library list / import; the UI's timeline lanes (`timeline.setExt`), picture overlay, inspector, cuts, undo. |
 | `server/example.js` | First-run helper that copies `examples/hello-film` into the films folder. |
 | `server/thumbstudio/` | Thumbnail Studio: store, schema, templates (`templates/thumbnail`), variants and notes (the selected agent makes the images). |
 | `ui/app.js` | Pages (Projects, project, Renders, Recent renders, Disk, Settings); `ui/review.js` + `ui/review/*` the review editor; `ui/thumbstudio/*`. |
